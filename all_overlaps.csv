@@ -1,0 +1,11 @@
+genomic element,overlaps,shuffle_overlaps,fold_enrichment,,,genomic element,fold enrichment
+c-elegans-cds.bed,5191,12361,0.419949842,,,cds,0.419949842
+c-elegans-promoter.bed,304,492,0.617886179,,,promoter,0.617886179
+c-elegans-exon.bed,1250,4290,0.291375291,,,exon,0.291375291
+c-elegans-five-prime-utr.bed,93,392,0.237244898,,,UTR 5',0.237244898
+c-elegans-three-prime-utr.bed,81,373,0.217158177,,,UTR 3',0.217158177
+c-elegans-intron.bed,2537,4040,0.627970297,,,intron,0.627970297
+c-elegans-genes.bed,1875,2329,0.805066552,,,genes,0.805066552
+c-elegans-mrna.bed,2489,3242,0.767735965,,,mRNA,0.767735965
+c-elegans-ncrna.bed,178,401,0.443890274,,,ncRNA,0.443890274
+c-elegans-tss.bed,539,803,0.671232877,,,TSS,0.671232877
