@@ -77,6 +77,6 @@ proteins = ['POT1', 'RPA', 'CST', 'CTC1-STN1-TEN1', 'BRCA1', 'hnRNP A1', 'Pif1']
 
 # Main: Adjust input and output CSV file names accordingly
 if __name__ == "__main__":
-    input_csv = "proteins.csv"
+    input_csv = "unique_to_mTbG4P_dedup.csv"
     output_csv = "protein_article_counts.csv"
     main(input_csv, output_csv)
