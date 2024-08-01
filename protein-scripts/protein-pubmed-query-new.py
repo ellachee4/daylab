@@ -108,8 +108,9 @@ def query_string(strings):
 def go_score(go):
     term = go[1]
     positives = {'damage response', 'DNA binding', 'DNA-binding', 'DNA repair',
-                 'nucleotide-excision repair', 'transcription'}
+                 'nucleotide-excision repair', 'transcription', 'repair'}
     negatives = {'RNA splicing', 'RNA processing', 'myosin', 'translation'}
+    # extra weight for damage response, dna binding, dna repair, less weight for general repair
     if any(word in term for word in positives):
         return 1
     elif any(word in term for word in negatives):
@@ -131,7 +132,7 @@ def query_go_terms(uniprots):
         gos = [(x['id'], x.get('properties', {}).get('term', 'N/A')) for x in data['dbReferences'] if x['type'] == 'GO']
         score = sum(map(go_score, gos))
         scores.append(score)
-        terms.append([go[0] for go in gos])
+        terms.append([go[1] for go in gos])
     print('Queried GO terms')
     return scores, terms
 
