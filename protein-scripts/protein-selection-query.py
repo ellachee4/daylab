@@ -26,10 +26,8 @@ import ast
 Entrez.email = 'salpukas.a@northeastern.edu'
 
 def get_article_count(protein_name):
-    '''
-    Query PubMed for the number of articles associated with a 
-    given protein using both MeSH terms and text words.
-    '''
+    '''Query PubMed for the number of articles associated with a 
+    given protein using both MeSH terms and text words.'''
 
     if protein_name=='NA':
         return 0
@@ -41,10 +39,9 @@ def get_article_count(protein_name):
 
 
 def query_pubmed(proteins):
-    '''
-    Query PubMed for a list of proteins and return a sorted list of proteins
-    and the number of associated articles.
-    '''
+    '''Query PubMed for a list of proteins and return a sorted list of proteins
+    and the number of associated articles.'''
+
     protein_article_counts = []
     for protein in proteins:
         count = get_article_count(protein)
@@ -200,6 +197,7 @@ def scrape_antibodypedia_data(uniprot_id):
 def query_antibodypedia(uniprots):
     '''Query antibodypedia given a list of proteins and return 
     a list of antibody links, number of antibodies, and number of providers'''
+
     links = list()
     antibodies = list()
     providers = list()
@@ -213,6 +211,9 @@ def query_antibodypedia(uniprots):
     return links, antibodies, providers
 
 def compute_score(row):
+    '''Compute weighted score for protein selection based on article count (favor fewer), 
+    number of antibodies, interactions GO score, and UV score'''
+
     score = row['Article Count (normalized)']*-2 + row['Number of Antibodies (normalized)']*0.5\
             + row['Interactions (normalized)'] + row['GO Score (normalized)'] + row['UV Score (normalized)']
     return score
@@ -260,29 +261,16 @@ def main(input_csv, output_csv):
     }
 
     df_all = pd.DataFrame(data_dict)
-
-    '''
-    sorted_fields = ['Uniprot', 'Protein Symbol', 'Article Count', 'Interactions', 'GO Score', 'GO Terms']
-    with open(go_output_csv, 'w', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow(sorted_fields)
-        for i in range(len(article_counts)):
-            writer.writerow([uniprots[i], symbols[i], article_counts[i],
-                             interactions[strings[i]], go_scores[i], go_terms[i]])
-    '''
     df_all['UV Score'] = df_all['UV_treatment'].apply(lambda x: uv_score(x))
     for col in ['Number of Antibodies', 'Article Count', 'Interactions', 'GO Score', 'UV Score']:
         df_all[col] =pd.to_numeric(df_all[col])
         df_all[f'{col} (normalized)'] = df_all[col]/df_all[col].std()
 
-    # Compute weighted score for protein selection
-
+    # Compute weighted score for protein selection and save results to CSV
     df_all['Overall Score'] = df_all.apply(lambda x: compute_score(x), axis=1)
     cols = ['Uniprot', 'Protein Symbol','Antibody Link', 'Number of Antibodies', 'Number of Providers',
             'Article Count', 'Interactions', 'GO Score', 'UV Score','Overall Score', 'GO Terms']
-
     df_all = df_all[cols]
-
     df_all.to_csv(final_output_csv)
     print('Protein selection data saved to', final_output_csv)
 
