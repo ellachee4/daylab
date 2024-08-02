@@ -18,6 +18,7 @@ import sys
 import csv
 import requests
 from collections import defaultdict
+import ast
 
 #----------------- Article Count -----------------#
 
@@ -125,6 +126,9 @@ def go_score(go):
     else:
         return 0
 
+def uv_score(uv):
+    return sum(map(lambda x: -1 if x=='mock' else 1, uv))
+
 def query_go_terms(uniprots):
     '''Query GO terms for a list of proteins and return a list of GO scores and terms'''
 
@@ -161,8 +165,6 @@ def scrape_antibodypedia_data(uniprot_id):
     )
     print('Found table for UNIPROT:', uniprot_id)
 
-    data = []
-
     # Extract the link to the antibodies and number of antibodies
     try:
         link_tag = driver.find_element(By.XPATH, '//*[@id="search_results_table"]/tbody/tr/td[6]/a')
@@ -190,39 +192,32 @@ def scrape_antibodypedia_data(uniprot_id):
         print('Error: no providers found for UNIPROT:', uniprot_id)
         number_of_providers = 0
 
-    # Append the data to the list
-    data.append({
-        'UNPROT': uniprot_id,
-        'Antibody Link': antibodies_link,
-        'Number of Antibodies': number_of_antibodies,
-        'Number of Providers': number_of_providers
-    })
 
     driver.quit()
-    return data
+    return (antibodies_link, number_of_antibodies, number_of_providers)
 
-def query_antibodypedia(uniprots_csv, antibody_output_csv):
+def query_antibodypedia(uniprots):
     '''Query antibodypedia given a list of proteins and return 
     a list of antibody links, number of antibodies, and number of providers'''
+    links = list()
+    antibodies = list()
+    providers = list()
 
-    # Read in CSV (change file name accordingly) to dataframe
-    df = pd.read_csv(uniprots_csv)
-    uniprot_df = df[['UNIPROT']].copy()
+    for u in uniprots:
+        link, antibody, provider = scrape_antibodypedia_data(u)
+        links.append(link)
+        antibodies.append(antibody)
+        providers.append(provider)
 
-    # Scrape data for each UniProt ID in dataframe
-    for index, row in uniprot_df.iterrows():
-        uniprot_id = row['UNIPROT']
-        data = scrape_antibodypedia_data(uniprot_id)
-        uniprot_df.loc[index, 'Antibody Link'] = data[0]['Antibody Link']
-        uniprot_df.loc[index, 'Number of Antibodies'] = data[0]['Number of Antibodies']
-        uniprot_df.loc[index, 'Number of Providers'] = data[0]['Number of Providers']
-        print('Scraped data for UniProt ID:', uniprot_id)
+    return links, antibodies, providers
 
-    # Save the updated dataframe to a new CSV file (change file name as needed)
-    uniprot_df.to_csv(antibody_output_csv, index=False)
+def compute_score(row):
+    score = row['Article Count (normalized)']*-2 + row['Number of Antibodies (normalized)']*0.5\
+            + row['Interactions (normalized)'] + row['GO Score (normalized)'] + row['UV Score (normalized)']
+    return score
 
 #----------------- Main -----------------#
-def main(input_csv, go_output_csv, antibody_csv):
+def main(input_csv, output_csv):
     '''
     Read a list of proteins from a CSV file, query PubMed for the
     number of articles associated with each protein, save to CSV file.
@@ -231,23 +226,41 @@ def main(input_csv, go_output_csv, antibody_csv):
     # Read input CSV
     uniprots = []
     symbols = []
+    uvs = []
     with open(input_csv, newline='') as csvfile:
         reader = csv.reader(csvfile, delimiter=',', quotechar='|')
         next(reader, None)
         for row in reader:
             uniprots.append(row[0])
             symbols.append(row[2])
+            uvs.append(row[10])
     print('Read input CSV proteins')
 
     # Sorted list of proteins and their associated article counts
     article_counts = query_pubmed(symbols)
-    map = uniprot_to_string(uniprots)
-    print('Not converted:', [u for u in uniprots if u not in map.keys()])
-    strings = [map[uni] if uni in map.keys() else '' for uni in uniprots]
+    mapping = uniprot_to_string(uniprots)
+    print('Not converted:', [u for u in uniprots if u not in mapping.keys()])
+    strings = [mapping[uni] if uni in mapping.keys() else '' for uni in uniprots]
     interactions = query_string(strings)
     go_scores, go_terms = query_go_terms(uniprots)
+    links, num_antibodies, num_providers = query_antibodypedia(uniprots)
 
-    # Save to CSV
+    data_dict = {
+        'Uniprot': uniprots,
+        'Protein Symbol': symbols,
+        'Article Count': article_counts,
+        'Interactions': [interactions[string] for string in strings],
+        'Antibody Link': links,
+        'Number of Antibodies': num_antibodies,
+        'Number of Providers': num_providers,
+        'UV_treatment': uvs,
+        'GO Score': go_scores,
+        'GO Terms': go_terms
+    }
+
+    df_all = pd.DataFrame(data_dict)
+
+    '''
     sorted_fields = ['Uniprot', 'Protein Symbol', 'Article Count', 'Interactions', 'GO Score', 'GO Terms']
     with open(go_output_csv, 'w', newline='') as f:
         writer = csv.writer(f)
@@ -255,39 +268,26 @@ def main(input_csv, go_output_csv, antibody_csv):
         for i in range(len(article_counts)):
             writer.writerow([uniprots[i], symbols[i], article_counts[i],
                              interactions[strings[i]], go_scores[i], go_terms[i]])
-    print(f"Interactions and GO scores/terms saved to {go_output_csv}")
-
-    # Antibody availability data
-    query_antibodypedia(input_csv, antibody_csv)
-    print('Antibody availability data saved to', antibody_csv)
-
-    # Combine data (from antibody availability, GO scores/terms, and interactions)
-    df_antibodies = pd.read_csv(antibody_csv)
-    df_go = pd.read_csv(go_output_csv)
-
-    df_all = pd.concat([df_antibodies, df_go], axis = 1)
-    df_all.drop(columns=['UNIPROT'], inplace=True)
-
-    for col in ['Number of Antibodies', 'Article Count', 'Interactions', 'GO Score']:
+    '''
+    df_all['UV_treatment'] = df_all['UV_treatment'].apply(ast.literal_eval)
+    df_all['UV score'] = df_all['UV_treatment'].apply(lambda x: uv_score(x))
+    for col in ['Number of Antibodies', 'Article Count', 'Interactions', 'GO Score', 'UV Score']:
         df_all[f'{col} (normalized)'] = df_all[col]/df_all[col].std()
 
     # Compute weighted score for protein selection
-    def compute_score(row):
-        score = row['Article Count (normalized)']*-2 + row['Number of Antibodies (normalized)']*0.5 + row['Interactions (normalized)'] + row['GO Score (normalized)']
-        return score
 
     df_all['Overall Score'] = df_all.apply(lambda x: compute_score(x), axis=1)
     cols = ['Uniprot', 'Protein Symbol','Antibody Link', 'Number of Antibodies', 'Number of Providers',
-            'Article Count', 'Interactions', 'GO Score', 'Overall Score', 'GO Terms']
+            'Article Count', 'Interactions', 'GO Score', 'UV Score','Overall Score', 'GO Terms']
 
     df_all = df_all[cols]
+    print(df_all.head())
+    print(df_all.columns)
     df_all.to_csv(final_output_csv)
     print('Protein selection data saved to', final_output_csv)
 
 # Main: Adjust input and output CSV file names accordingly
 if __name__ == "__main__":
-    input_csv = "unique_to_mTbG4P_dedup.csv"
-    go_output_csv = "protein_article_counts2.csv"
-    antibody_csv = "antibody_availability_data.csv"
-    final_output_csv = "combined-scores.csv"
-    main(input_csv, go_output_csv, antibody_csv, final_output_csv)
+    input_csv = "proteins_with_uv.csv"
+    final_output_csv = "combined-scores2.csv"
+    main(input_csv, final_output_csv)
