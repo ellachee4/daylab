@@ -272,6 +272,7 @@ def main(input_csv, output_csv):
     '''
     df_all['UV Score'] = df_all['UV_treatment'].apply(lambda x: uv_score(x))
     for col in ['Number of Antibodies', 'Article Count', 'Interactions', 'GO Score', 'UV Score']:
+        df_all[col] =pd.to_numeric(df_all[col])
         df_all[f'{col} (normalized)'] = df_all[col]/df_all[col].std()
 
     # Compute weighted score for protein selection
