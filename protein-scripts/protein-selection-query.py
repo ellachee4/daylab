@@ -127,7 +127,8 @@ def go_score(go):
         return 0
 
 def uv_score(uv):
-    return sum(map(lambda x: -1 if x=='mock' else 1, uv))
+    uv_list = list(set(uv.split(':')))
+    return sum(map(lambda x: -1 if x=='mock' else 1, uv_list))
 
 def query_go_terms(uniprots):
     '''Query GO terms for a list of proteins and return a list of GO scores and terms'''
@@ -153,7 +154,7 @@ def scrape_antibodypedia_data(uniprot_id):
     '''Scrapes antibodypedia.com for the access link, 
     number of antibodies and providers for a given UniProt ID'''
 
-    # Set up the Selenium WebDriver, construct URL, navigate to URL
+    # Set up the Selenium  WebDriver, construct URL, navigate to URL
     driver = webdriver.Chrome()
     base_url = 'https://www.antibodypedia.com/explore/uniprot%3A'
     url = f'{base_url}{uniprot_id}'
@@ -269,8 +270,7 @@ def main(input_csv, output_csv):
             writer.writerow([uniprots[i], symbols[i], article_counts[i],
                              interactions[strings[i]], go_scores[i], go_terms[i]])
     '''
-    df_all['UV_treatment'] = df_all['UV_treatment'].apply(ast.literal_eval)
-    df_all['UV score'] = df_all['UV_treatment'].apply(lambda x: uv_score(x))
+    df_all['UV Score'] = df_all['UV_treatment'].apply(lambda x: uv_score(x))
     for col in ['Number of Antibodies', 'Article Count', 'Interactions', 'GO Score', 'UV Score']:
         df_all[f'{col} (normalized)'] = df_all[col]/df_all[col].std()
 
@@ -281,8 +281,7 @@ def main(input_csv, output_csv):
             'Article Count', 'Interactions', 'GO Score', 'UV Score','Overall Score', 'GO Terms']
 
     df_all = df_all[cols]
-    print(df_all.head())
-    print(df_all.columns)
+
     df_all.to_csv(final_output_csv)
     print('Protein selection data saved to', final_output_csv)
 
