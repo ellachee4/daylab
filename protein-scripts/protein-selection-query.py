@@ -26,8 +26,10 @@ import ast
 Entrez.email = 'salpukas.a@northeastern.edu'
 
 def get_article_count(protein_name):
-    '''Query PubMed for the number of articles associated with a 
-    given protein using both MeSH terms and text words.'''
+    '''
+    Query PubMed for the number of articles associated with a 
+    given protein using both MeSH terms and text words.
+    '''
 
     if protein_name=='NA':
         return 0
@@ -39,8 +41,10 @@ def get_article_count(protein_name):
 
 
 def query_pubmed(proteins):
-    '''Query PubMed for a list of proteins and return a sorted list of proteins
-    and the number of associated articles.'''
+    '''
+    Query PubMed for a list of proteins and return a sorted list of proteins
+    and the number of associated articles.
+    '''
 
     protein_article_counts = []
     for protein in proteins:
@@ -55,7 +59,7 @@ def query_pubmed(proteins):
 
 #----------------- Protein-Protein Interactions -----------------#
 def uniprot_to_string(uniprots):
-    '''Access StringDB API to convert Uniprot IDs to StringDB IDs'''
+    '''Access StringDB API to convert Uniprot IDs to StringDB IDs.'''
 
     string_api_url = "https://version-11-5.string-db.org/api"
     output_format = "tsv-no-header"
@@ -81,7 +85,7 @@ def uniprot_to_string(uniprots):
     return map
 
 def query_string(strings):
-    '''Access StringDB API to query protein-protein interactions'''
+    '''Access StringDB API to query protein-protein interactions.'''
 
     string_api_url = "https://version-11-5.string-db.org/api"
     output_format = "tsv-no-header"
@@ -108,8 +112,10 @@ def query_string(strings):
 #----------------- GO Terms -----------------#
 
 def go_score(go):
-    '''Calculate GO score, based on importance of GO term
-    (extra weights for damage response, DNA binding, DNA repair, less for general repair)'''
+    '''
+    Calculate GO score, based on importance of GO term
+    (extra weights for damage response, DNA binding, DNA repair, less for general repair).
+    '''
 
     term = go[1]
     positives = {'damage response', 'DNA binding', 'DNA-binding', 'DNA repair',
@@ -128,7 +134,9 @@ def uv_score(uv):
     return sum(map(lambda x: -1 if x=='mock' else 1, uv_list))
 
 def query_go_terms(uniprots):
-    '''Query GO terms for a list of proteins and return a list of GO scores and terms'''
+    '''
+    Query GO terms for a list of proteins and return a list of GO scores and terms.
+    '''
 
     scores = []
     terms = []
@@ -148,8 +156,10 @@ def query_go_terms(uniprots):
 
 #----------------- Antibody Availability -----------------#
 def scrape_antibodypedia_data(uniprot_id):
-    '''Scrapes antibodypedia.com for the access link, 
-    number of antibodies and providers for a given UniProt ID'''
+    '''
+    Scrapes antibodypedia.com for the access link, 
+    number of antibodies and providers for a given UniProt ID.
+    '''
 
     # Set up the Selenium  WebDriver, construct URL, navigate to URL
     driver = webdriver.Chrome()
@@ -195,8 +205,10 @@ def scrape_antibodypedia_data(uniprot_id):
     return (antibodies_link, number_of_antibodies, number_of_providers)
 
 def query_antibodypedia(uniprots):
-    '''Query antibodypedia given a list of proteins and return 
-    a list of antibody links, number of antibodies, and number of providers'''
+    '''
+    Query antibodypedia given a list of proteins and return 
+    a list of antibody links, number of antibodies, and number of providers.
+    '''
 
     links = list()
     antibodies = list()
@@ -211,8 +223,10 @@ def query_antibodypedia(uniprots):
     return links, antibodies, providers
 
 def compute_score(row):
-    '''Compute weighted score for protein selection based on article count (favor fewer), 
-    number of antibodies, interactions GO score, and UV score'''
+    '''
+    Compute weighted score for protein selection based on article count (favor fewer), 
+    number of antibodies, interactions GO score, and UV score.
+    '''
 
     score = row['Article Count (normalized)']*-2 + row['Number of Antibodies (normalized)']*0.5\
             + row['Interactions (normalized)'] + row['GO Score (normalized)'] + row['UV Score (normalized)']
