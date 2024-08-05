@@ -228,6 +228,10 @@ def compute_score(row):
     number of antibodies, interactions GO score, and UV score.
     '''
 
+    # late more important, mock less important ercc6 rated high by score, 
+    # present at 3 timepoints, mock is one of them (fix uv score)
+    # any term present gets increase score if found in abstract
+
     score = row['Article Count (normalized)']*-2 + row['Number of Antibodies (normalized)']*0.5\
             + row['Interactions (normalized)'] + row['GO Score (normalized)'] + row['UV Score (normalized)']
     return score
