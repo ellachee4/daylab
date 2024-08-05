@@ -129,9 +129,19 @@ def go_score(go):
     else:
         return 0
 
+def map_uv(timepoint):
+    if timepoint=='mock':
+        return -4
+    elif timepoint=='1h':
+        return 1
+    elif timepoint=='24h':
+        return 2
+    else:
+        return 3
+
 def uv_score(uv):
     uv_list = list(set(uv.split(':')))
-    return sum(map(lambda x: -1 if x=='mock' else 1, uv_list))
+    return sum(map(map_uv, uv_list))
 
 def query_go_terms(uniprots):
     '''
