@@ -186,6 +186,7 @@ def scrape_antibodypedia_data(uniprot_id):
         #print('Error: no antibodies found for UNIPROT:', uniprot_id)
         antibodies_link = 'None'
         number_of_antibodies = 0
+        antibody_id = 'None'
         
     # Extract number of providers from the text within the div
     try:
@@ -210,6 +211,9 @@ def track_references_antipodypedia(antibody_id):
     '''
     Track antibodies with references from antibodypedia.
     '''
+    
+    if antibody_id == 'None':
+        return 0
     
     # Set up the Selenium  WebDriver, construct URL, navigate to URL
     driver = webdriver.Chrome()
