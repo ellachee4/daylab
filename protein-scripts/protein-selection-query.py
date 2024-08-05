@@ -178,11 +178,12 @@ def scrape_antibodypedia_data(uniprot_id):
         link_tag = driver.find_element(By.XPATH, '//*[@id="search_results_table"]/tbody/tr/td[6]/a')
         if link_tag:
             antibodies_link = link_tag.get_attribute('href')
+            antibody_id = antibodies_link.text[35:]
             number_of_antibodies = link_tag.text.split(' ')[0]
-            print('Antibodies Link:', antibodies_link)
-            print('Number of Antibodies:', number_of_antibodies)
+            #print('Antibodies Link:', antibodies_link)
+            #print('Number of Antibodies:', number_of_antibodies)
     except Exception as error:
-        print('Error: no antibodies found for UNIPROT:', uniprot_id)
+        #print('Error: no antibodies found for UNIPROT:', uniprot_id)
         antibodies_link = 'None'
         number_of_antibodies = 0
         
@@ -192,17 +193,46 @@ def scrape_antibodypedia_data(uniprot_id):
         if providers_div:
             try:
                 number_of_providers = providers_div.find_element(By.XPATH, '//*[@id="search_results_table"]/tbody/tr/td[6]/div/b').text
-                print('Number of Providers:', number_of_providers)
+                #print('Number of Providers:', number_of_providers)
             except Exception as error:
-                print('Error: no providers found for UNIPROT:', uniprot_id)
+                #print('Error: no providers found for UNIPROT:', uniprot_id)
                 number_of_providers = 0
     except Exception as error:
-        print('Error: no providers found for UNIPROT:', uniprot_id)
+        #print('Error: no providers found for UNIPROT:', uniprot_id)
         number_of_providers = 0
 
 
     driver.quit()
-    return (antibodies_link, number_of_antibodies, number_of_providers)
+    print('Queried for protein:', uniprot_id)
+    return (antibodies_link, antibody_id, number_of_antibodies, number_of_providers)
+
+def track_references_antipodypedia(antibody_id):
+    '''
+    Track antibodies with references from antibodypedia.
+    '''
+    
+    # Set up the Selenium  WebDriver, construct URL, navigate to URL
+    driver = webdriver.Chrome()
+    url = f'https://www.antibodypedia.com/gene/{antibody_id}?reference%5B%5D=yes'
+    driver.get(url)
+    
+    # Load table
+    WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.ID, "featured_antibodies"))
+    )
+    print('Found table for antibody:', antibody_id)
+
+    # Extract the link to the antibodies and number of antibodies
+    try:
+        link_tag = driver.find_element(By.XPATH, '//*[@id="filter_results"]/b[1]')
+        if link_tag:
+            referenced_antibodies = link_tag.text
+            print('Number of Referenced Antibodies:', referenced_antibodies)
+    except Exception as error:
+        print('Error: no references found for antibody:', antibody_id)
+        referenced_antibodies = 0
+    driver.quit()
+    return referenced_antibodies
 
 def query_antibodypedia(uniprots):
     '''
@@ -211,16 +241,22 @@ def query_antibodypedia(uniprots):
     '''
 
     links = list()
+    ids = list()
     antibodies = list()
     providers = list()
+    references = list()
 
     for u in uniprots:
-        link, antibody, provider = scrape_antibodypedia_data(u)
+        link, id, antibody, provider = scrape_antibodypedia_data(u)
         links.append(link)
+        ids.append(id)
         antibodies.append(antibody)
         providers.append(provider)
-
-    return links, antibodies, providers
+    
+    for i in ids:
+        references.append(track_references_antipodypedia(i))
+    print('Successfully queried antibodypedia')
+    return links, antibodies, providers, references
 
 def compute_score(row):
     '''
@@ -263,7 +299,7 @@ def main(input_csv, output_csv):
     strings = [mapping[uni] if uni in mapping.keys() else '' for uni in uniprots]
     interactions = query_string(strings)
     go_scores, go_terms = query_go_terms(uniprots)
-    links, num_antibodies, num_providers = query_antibodypedia(uniprots)
+    links, num_antibodies, num_providers, num_referenced = query_antibodypedia(uniprots)
 
     data_dict = {
         'Uniprot': uniprots,
@@ -273,6 +309,7 @@ def main(input_csv, output_csv):
         'Antibody Link': links,
         'Number of Antibodies': num_antibodies,
         'Number of Providers': num_providers,
+        'Number of Ref-ed Antibodies': num_referenced,
         'UV_treatment': uvs,
         'GO Score': go_scores,
         'GO Terms': go_terms
@@ -286,7 +323,7 @@ def main(input_csv, output_csv):
 
     # Compute weighted score for protein selection and save results to CSV
     df_all['Overall Score'] = df_all.apply(lambda x: compute_score(x), axis=1)
-    cols = ['Uniprot', 'Protein Symbol','Antibody Link', 'Number of Antibodies', 'Number of Providers',
+    cols = ['Uniprot', 'Protein Symbol','Antibody Link', 'Number of Antibodies', 'Number of Providers', 'Number of Ref-ed Antibodies',
             'Article Count', 'Interactions', 'GO Score', 'UV Score','Overall Score', 'GO Terms']
     df_all = df_all[cols]
     df_all.to_csv(final_output_csv)
