@@ -31,22 +31,20 @@ def get_article_count(protein_name):
     given protein using both MeSH terms and text words.
     '''
 
-    if isinstance(protein_name, str):
-        term = f'{protein_name}[MeSH Terms] OR {protein_name}[tw] AND (UV[tiab] OR Ultraviolet radiation[tiab] OR G4[tiab] OR quadruplex[tiab] OR dna repair[tiab] OR melanoma[tiab])'
+    if protein_name=='NA':
+        return 0
+    else:
+        term = f'{protein_name}[MeSH Terms] OR {protein_name}[tw] AND (UV[Title/Abstract] OR Ultraviolet radiation[Title/Abstract] OR G4[Title/Abstract] OR quadruplex[Title/Abstract] OR dna repair[Title/Abstract] OR melanoma[Title/Abstract])'
         handle = Entrez.esearch(db='pubmed', term=term)
         record = Entrez.read(handle)
         handle.close()
         return int(record['Count'])
-    else:
-        return 0
-
 
 def query_pubmed(proteins):
     '''
     Query PubMed for a list of proteins and return a sorted list of proteins
     and the number of associated articles.
     '''
-
     protein_article_counts = []
     for protein in proteins:
         count = get_article_count(protein)
@@ -189,12 +187,13 @@ def scrape_antibodypedia_data(uniprot_id):
         link_tag = driver.find_element(By.XPATH, '//*[@id="search_results_table"]/tbody/tr/td[6]/a')
         if link_tag:
             antibodies_link = link_tag.get_attribute('href')
-            antibody_id = antibodies_link.text[35:]
+            antibody_id = str(link_tag.get_attribute('href'))[35:]
             number_of_antibodies = link_tag.text.split(' ')[0]
-            #print('Antibodies Link:', antibodies_link)
-            #print('Number of Antibodies:', number_of_antibodies)
+            print('Antibodies Link:', antibodies_link)
+            print('Number of Antibodies:', number_of_antibodies)
+            print('Antibody ID:', antibody_id)
     except Exception as error:
-        #print('Error: no antibodies found for UNIPROT:', uniprot_id)
+        print('Error: no antibodies found for UNIPROT:', uniprot_id)
         antibodies_link = 'None'
         number_of_antibodies = 0
         antibody_id = 'None'
@@ -212,7 +211,6 @@ def scrape_antibodypedia_data(uniprot_id):
     except Exception as error:
         #print('Error: no providers found for UNIPROT:', uniprot_id)
         number_of_providers = 0
-
 
     driver.quit()
     print('Queried for protein:', uniprot_id)
@@ -273,6 +271,7 @@ def query_antibodypedia(uniprots):
     print('Successfully queried antibodypedia')
     return links, antibodies, providers, references
 
+#----------------- Compute Score -----------------#
 def compute_score(row):
     '''
     Compute weighted score for protein selection based on article count (favor fewer), 
@@ -347,5 +346,5 @@ def main(input_csv, output_csv):
 # Main: Adjust input and output CSV file names accordingly
 if __name__ == "__main__":
     input_csv = "proteins_with_uv.csv"
-    final_output_csv = "combined-scores2.csv"
+    final_output_csv = "combined-scores3.csv"
     main(input_csv, final_output_csv)
