@@ -128,20 +128,6 @@ def go_score(go):
     else:
         return 0
 
-def map_uv(timepoint):
-    if timepoint=='mock':
-        return -4
-    elif timepoint=='1h':
-        return 1
-    elif timepoint=='24h':
-        return 2
-    else:
-        return 3
-
-def uv_score(uv):
-    uv_list = list(set(uv.split(':')))
-    return sum(map(map_uv, uv_list))
-
 def query_go_terms(uniprots):
     '''
     Query GO terms for a list of proteins and return a list of GO scores and terms.
@@ -163,6 +149,24 @@ def query_go_terms(uniprots):
     print('Queried GO terms')
     return scores, terms
 
+
+#----------------- UV Score -----------------#
+def map_uv(timepoint):
+    if timepoint=='mock':
+        return -4
+    elif timepoint=='1h':
+        return 1
+    elif timepoint=='24h':
+        return 2
+    else:
+        return 3
+
+def uv_score(uv):
+    uv_list = list(set(uv.split(':')))
+    print('UV scores calculated')
+    return sum(map(map_uv, uv_list))
+
+
 #----------------- Antibody Availability -----------------#
 def scrape_antibodypedia_data(uniprot_id):
     '''
@@ -180,7 +184,7 @@ def scrape_antibodypedia_data(uniprot_id):
     WebDriverWait(driver, 10).until(
         EC.presence_of_element_located((By.ID, "search_results_table"))
     )
-    print('Found table for UNIPROT:', uniprot_id)
+    #print('Found table for UNIPROT:', uniprot_id)
 
     # Extract the link to the antibodies and number of antibodies
     try:
@@ -189,9 +193,9 @@ def scrape_antibodypedia_data(uniprot_id):
             antibodies_link = link_tag.get_attribute('href')
             antibody_id = str(link_tag.get_attribute('href'))[35:]
             number_of_antibodies = link_tag.text.split(' ')[0]
-            print('Antibodies Link:', antibodies_link)
-            print('Number of Antibodies:', number_of_antibodies)
-            print('Antibody ID:', antibody_id)
+            #print('Antibodies Link:', antibodies_link)
+            #print('Number of Antibodies:', number_of_antibodies)
+            #print('Antibody ID:', antibody_id)
     except Exception as error:
         print('Error: no antibodies found for UNIPROT:', uniprot_id)
         antibodies_link = 'None'
@@ -233,14 +237,14 @@ def track_references_antipodypedia(antibody_id):
     WebDriverWait(driver, 10).until(
         EC.presence_of_element_located((By.ID, "featured_antibodies"))
     )
-    print('Found table for antibody:', antibody_id)
+    #print('Found table for antibody:', antibody_id)
 
     # Extract the link to the antibodies and number of antibodies
     try:
         link_tag = driver.find_element(By.XPATH, '//*[@id="filter_results"]/b[1]')
         if link_tag:
             referenced_antibodies = link_tag.text
-            print('Number of Referenced Antibodies:', referenced_antibodies)
+            #print('Number of Referenced Antibodies:', referenced_antibodies)
     except Exception as error:
         print('Error: no references found for antibody:', antibody_id)
         referenced_antibodies = 0
