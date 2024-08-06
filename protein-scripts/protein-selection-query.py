@@ -31,13 +31,14 @@ def get_article_count(protein_name):
     given protein using both MeSH terms and text words.
     '''
 
-    if protein_name=='NA':
+    if isinstance(protein_name, str):
+        term = f'{protein_name}[MeSH Terms] OR {protein_name}[tw] AND (UV[tiab] OR Ultraviolet radiation[tiab] OR G4[tiab] OR quadruplex[tiab] OR dna repair[tiab] OR melanoma[tiab])'
+        handle = Entrez.esearch(db='pubmed', term=term)
+        record = Entrez.read(handle)
+        handle.close()
+        return int(record['Count'])
+    else:
         return 0
-    term = f'{protein_name}[MeSH Terms] OR {protein_name}[tw]'
-    handle = Entrez.esearch(db='pubmed', term=term)
-    record = Entrez.read(handle)
-    handle.close()
-    return int(record['Count'])
 
 
 def query_pubmed(proteins):
@@ -211,7 +212,7 @@ def track_references_antipodypedia(antibody_id):
     '''
     Track antibodies with references from antibodypedia.
     '''
-    
+
     if antibody_id == 'None':
         return 0
     
