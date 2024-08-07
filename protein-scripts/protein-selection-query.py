@@ -170,8 +170,8 @@ def query_go_terms(uniprots):
 #----------------- Antibody Availability -----------------#
 def scrape_antibodypedia_data(uniprot_id):
     '''
-    Scrapes antibodypedia.com for the access link, 
-    number of antibodies and providers for a given UniProt ID.
+    Scrapes antibodypedia.com for the access link, number of antibodies, 
+    number of referenced antibodies, and providers for a given UniProt ID.
     '''
 
     # Set up the Selenium  WebDriver, construct URL, navigate to URL
@@ -248,8 +248,8 @@ def track_references_antipodypedia(antibody_id):
 
 def query_antibodypedia(uniprots):
     '''
-    Query antibodypedia given a list of proteins and return 
-    a list of antibody links, number of antibodies, and number of providers.
+    Query antibodypedia given a list of proteins and return a list of 
+    antibody links, number of antibodies (including referenced), and number of providers.
     '''
 
     links = list()
@@ -274,7 +274,7 @@ def query_antibodypedia(uniprots):
 def compute_score(row):
     '''
     Compute weighted score for protein selection based on article count (favor fewer), 
-    number of antibodies, interactions GO score, and UV score.
+    number of referenced antibodies, interactions GO score, and UV score.
     '''
 
     # late more important, mock less important ercc6 rated high by score, 
