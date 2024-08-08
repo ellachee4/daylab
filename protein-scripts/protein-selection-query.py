@@ -14,6 +14,8 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.options import Options
+import time
 from Bio import Entrez
 import sys
 import csv
@@ -26,36 +28,44 @@ import ast
 # Adjust email as needed
 Entrez.email = 'salpukas.a@northeastern.edu'
 
-def get_article_count(protein_name):
+def get_article_count(protein_name, doAll):
     '''
     Query PubMed for the number of articles associated with a 
     given protein using both MeSH terms and text words.
     '''
-
     if protein_name=='NA':
         return 0
+    
+    # Query for articles associated with the protein name (doAll=True) or
+    # articles associated with the protein name and specific terms (doAll=False)
+    if doAll:
+        term = f'{protein_name}[MeSH Terms] OR {protein_name}[tw]'
     else:
         term = f'{protein_name}[MeSH Terms] OR {protein_name}[tw] AND (UV[Title/Abstract] OR Ultraviolet radiation[Title/Abstract] OR G4[Title/Abstract] OR quadruplex[Title/Abstract] OR dna repair[Title/Abstract] OR melanoma[Title/Abstract])'
-        handle = Entrez.esearch(db='pubmed', term=term)
-        record = Entrez.read(handle)
-        handle.close()
-        return int(record['Count'])
+ 
+    handle = Entrez.esearch(db='pubmed', term=term)
+    record = Entrez.read(handle)
+    handle.close()
+    return int(record['Count'])
 
 def query_pubmed(proteins):
     '''
     Query PubMed for a list of proteins and return a sorted list of proteins
     and the number of associated articles.
     '''
-    protein_article_counts = []
+    protein_all_article_counts = []
+    protein_specific_article_counts = []
     for protein in proteins:
-        count = get_article_count(protein)
-        protein_article_counts.append(count)
-        length = len(protein_article_counts)
+        all_count = get_article_count(protein, True)
+        protein_all_article_counts.append(all_count)
+        specific_count = get_article_count(protein, False)
+        protein_specific_article_counts.append(specific_count)
+        length = len(protein_all_article_counts)
         if length % 100 == 0:
             print(length, '/', len(proteins), 'done')
 
     print('Finished article count')
-    return protein_article_counts
+    return protein_all_article_counts, protein_specific_article_counts
 
 #----------------- Protein-Protein Interactions -----------------#
 def uniprot_to_string(uniprots):
@@ -76,7 +86,7 @@ def uniprot_to_string(uniprots):
     results = requests.post(request_url, data=params)
     map = {line.split("\t")[0]:line.split("\t")[2] for line in results.text.strip().split("\n")}
 
-    # hard code mapping failures
+    # Hard code mapping failures
     map['A8MXQ7'] = '9606.ENSP00000489685'
     map['P0CJ79'] = '9606.ENSP00000491567'
     map['Q8TD47'] = '9606.ENSP00000486252'
@@ -110,7 +120,6 @@ def query_string(strings):
     return str_dict
 
 #----------------- GO Terms -----------------#
-
 def go_score(go):
     '''
     Calculate GO score, based on importance of GO term
@@ -135,7 +144,7 @@ def map_uv(timepoint):
     '''Assign timepoints to UV scores. '''
     if timepoint=='mock':
         return -4
-    elif timepoint=='1h':
+    elif timepoint=='01h':
         return 1
     elif timepoint=='24h':
         return 2
@@ -145,7 +154,6 @@ def map_uv(timepoint):
 def uv_score(uv):
     ''' Calculate UV score based on the timepoints of UV treatment.'''
     uv_list = list(set(uv.split(':')))
-    print('UV scores calculated')
     return sum(map(map_uv, uv_list))
 
 def query_go_terms(uniprots):
@@ -170,13 +178,15 @@ def query_go_terms(uniprots):
 #----------------- Antibody Availability -----------------#
 def scrape_antibodypedia_data(uniprot_id):
     '''
-    Scrapes antibodypedia.com for the access link, number of antibodies, 
-    number of referenced antibodies, and providers for a given UniProt ID.
+    Scrapes antibodypedia.com for the access link, 
+    and number of referenced antibodies, for a given UniProt ID.
     '''
 
     # Set up the Selenium  WebDriver, construct URL, navigate to URL
     options = Options()
-    options.add_argument('--start-maximized')
+    options.add_argument("--headless")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
     driver = webdriver.Chrome(options=options)
     url = f'https://www.antibodypedia.com/explore/uniprot%3A{uniprot_id}'
     try:
@@ -195,38 +205,30 @@ def scrape_antibodypedia_data(uniprot_id):
         if link_tag:
             antibodies_link = link_tag.get_attribute('href')
             antibody_id = str(link_tag.get_attribute('href'))[35:]
-            number_of_antibodies = link_tag.text.split(' ')[0]
     except Exception as error:
         print('Error: no antibodies found for UNIPROT:', uniprot_id)
-        antibodies_link = 'None'
-        number_of_antibodies = 0
         antibody_id = 'None'
-        
-    # Extract number of providers from the text within the div
-    try:
-        providers_div = driver.find_element(By.CLASS_NAME, 'txtOne')
-        if providers_div:
-            try:
-                number_of_providers = providers_div.find_element(By.XPATH, '//*[@id="search_results_table"]/tbody/tr/td[6]/div/b').text
-            except Exception as error:
-                number_of_providers = 0
-    except Exception as error:
-        number_of_providers = 0
+        antibodies_link = 'None'
 
     driver.quit()
     print('Queried for protein:', uniprot_id)
-    return (antibodies_link, antibody_id, number_of_antibodies, number_of_providers)
+    return (antibodies_link, antibody_id)
 
 def track_references_antipodypedia(antibody_id):
     '''
-    Track antibodies with references from antibodypedia.
+    Track number antibodies with references from antibodypedia.
     '''
 
+    # Check if there is no antibody found
     if antibody_id == 'None':
         return 0
     
     # Set up the Selenium  WebDriver, construct URL, navigate to URL
-    driver = webdriver.Chrome()
+    options = Options()
+    options.add_argument("--headless")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    driver = webdriver.Chrome(options=options)
     url = f'https://www.antibodypedia.com/gene/{antibody_id}?reference%5B%5D=yes'
     driver.get(url)
     
@@ -249,31 +251,27 @@ def track_references_antipodypedia(antibody_id):
 def query_antibodypedia(uniprots):
     '''
     Query antibodypedia given a list of proteins and return a list of 
-    antibody links, number of antibodies (including referenced), and number of providers.
+    antibody links, and number of referenced antibodies.
     '''
 
     links = list()
     ids = list()
-    antibodies = list()
-    providers = list()
-    references = list()
+    num_referenced = list()
 
     for u in uniprots:
-        link, id, antibody, provider = scrape_antibodypedia_data(u)
+        link, id = scrape_antibodypedia_data(u)
         links.append(link)
         ids.append(id)
-        antibodies.append(antibody)
-        providers.append(provider)
     
     for i in ids:
-        references.append(track_references_antipodypedia(i))
-    print('Successfully queried antibodypedia')
-    return links, antibodies, providers, references
+        num_referenced.append(track_references_antipodypedia(i))
+    print('Successfully queried Antibodypedia')
+    return links, num_referenced
 
 #----------------- Compute Score -----------------#
 def compute_score(row):
     '''
-    Compute weighted score for protein selection based on article count (favor fewer), 
+    Compute weighted score for protein selection based on article counts (favor fewer), 
     number of referenced antibodies, interactions GO score, and UV score.
     '''
 
@@ -281,16 +279,21 @@ def compute_score(row):
     # present at 3 timepoints, mock is one of them (fix uv score)
     # any term present gets increase score if found in abstract
 
-    score = row['Article Count (normalized)']*-2 + row['Number of ref-ed Antibodies (normalized)']*0.5\
-            + row['Interactions (normalized)'] + row['GO Score (normalized)'] + row['UV Score (normalized)']
+    score = row['Total Article Count (normalized)']*-0.5 + row['Term Article Count (normalized)'] + row['Ref-ed Antibodies via Antibodypedia (normalized)']*0.5 + row['\'String\' Interactions (normalized)'] + row['GO Score (normalized)'] + row['UV Score (normalized)']*2
     return score
 
 #----------------- Main -----------------#
 def main(input_csv, output_csv):
     '''
     Read a list of proteins from a CSV file, query PubMed for the
-    number of articles associated with each protein, save to CSV file.
+    number of articles associated with each protein, string interactions, 
+    query Antibodypedia.com for referenced antibodies, find associated 
+    GO terms and compute a selection score, save results to CSV file.
     '''
+
+    # Track start time
+    start_time = time.time()
+    print('Starting protein selection query at', start_time)
 
     # Read input CSV
     uniprots = []
@@ -306,8 +309,8 @@ def main(input_csv, output_csv):
     print('Read input CSV proteins')
 
     # Sorted list of proteins and their associated article counts
-    links, num_antibodies, num_providers, num_referenced = query_antibodypedia(uniprots)
-    article_counts = query_pubmed(symbols)
+    links, num_referenced = query_antibodypedia(uniprots)
+    total_article_counts, term_article_counts = query_pubmed(symbols)
     mapping = uniprot_to_string(uniprots)
     print('Not converted:', [u for u in uniprots if u not in mapping.keys()])
     strings = [mapping[uni] if uni in mapping.keys() else '' for uni in uniprots]
@@ -317,33 +320,39 @@ def main(input_csv, output_csv):
     data_dict = {
         'Uniprot': uniprots,
         'Protein Symbol': symbols,
-        'Article Count': article_counts,
-        'Interactions': [interactions[string] for string in strings],
-        'Antibody Link': links,
-        'Number of Antibodies': num_antibodies,
-        'Number of Providers': num_providers,
-        'Number of Ref-ed Antibodies': num_referenced,
+        'Total Article Count': total_article_counts,
+        'Term Article Count': term_article_counts,
+        '\'String\' Interactions': [interactions[string] for string in strings],
+        'Antibodypedia Link': links,
+        'Ref-ed Antibodies via Antibodypedia': num_referenced,
         'UV_treatment': uvs,
         'GO Score': go_scores,
         'GO Terms': go_terms
     }
 
+    # Set up dataframe and normalize counts/scores
     df_all = pd.DataFrame(data_dict)
     df_all['UV Score'] = df_all['UV_treatment'].apply(lambda x: uv_score(x))
-    for col in ['Number of Ref-ed Antibodies', 'Article Count', 'Interactions', 'GO Score', 'UV Score']:
+    for col in ['Ref-ed Antibodies via Antibodypedia', 'Total Article Count', 'Term Article Count', 
+                '\'String\' Interactions', 'GO Score', 'UV Score']:
         df_all[col] =pd.to_numeric(df_all[col])
         df_all[f'{col} (normalized)'] = df_all[col]/df_all[col].std()
 
     # Compute weighted score for protein selection and save results to CSV
     df_all['Overall Score'] = df_all.apply(lambda x: compute_score(x), axis=1)
-    cols = ['Uniprot', 'Protein Symbol','Antibody Link', 'Number of Antibodies', 'Number of Providers', 'Number of Ref-ed Antibodies',
-            'Article Count', 'Interactions', 'GO Score', 'UV Score','Overall Score', 'GO Terms']
+    cols = ['Uniprot', 'Protein Symbol','Antibodypedia Link', 'Ref-ed Antibodies via Antibodypedia',
+            'Total Article Count', 'Term Article Count', '\'String\' Interactions', 'GO Score', 
+            'UV Score','Overall Score', 'GO Terms']
     df_all = df_all[cols]
     df_all.to_csv(final_output_csv)
+
+    # Track end time
+    endtime = time.time()
+    print('Time taken:', endtime - start_time)
     print('Protein selection data saved to', final_output_csv)
 
 # Main: Adjust input and output CSV file names accordingly
 if __name__ == "__main__":
     input_csv = "proteins_with_uv.csv"
-    final_output_csv = "combined-scores3.csv"
+    final_output_csv = "combined-scores-final.csv"
     main(input_csv, final_output_csv)
