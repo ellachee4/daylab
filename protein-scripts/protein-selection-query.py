@@ -26,7 +26,7 @@ import ast
 #----------------- Article Count -----------------#
 
 # Adjust email as needed
-Entrez.email = 'salpukas.a@northeastern.edu'
+Entrez.email = 'chee.el@northeastern.edu'
 
 def get_article_count(protein_name, doAll):
     '''
@@ -113,8 +113,10 @@ def query_string(strings):
     str_dict = defaultdict(lambda: 0)
     for line in lines:
         l = line.strip().split("\t")
-        str_dict[l[0]] += 1
-        str_dict[l[1]] += 1
+        if len(l) >= 2:
+            str_dict[l[0]] += 1
+            str_dict[l[1]] += 1
+            print(l[0], l[1])
 
     print('Queried protein interactions')
     return str_dict
@@ -128,9 +130,15 @@ def go_score(go):
 
     term = go[1]
     positives = {'damage response', 'DNA binding', 'DNA-binding', 'DNA repair',
-                 'nucleotide-excision repair', 'transcription', 'repair'}
-    negatives = {'RNA splicing', 'RNA processing', 'myosin', 'translation'}
-    # extra weight for damage response, dna binding, dna repair, less weight for general repair
+                 'nucleotide-excision repair', 'transcription', 'repair', 'DNA helicase', 'helicase', 
+                 'chromatin binding', 'G4', 'quadruplex', 'guanine', 'gtpase', 'transcription initiation',
+                 'transcription termination', 'transcription activator', 'poly-ADP-D-ribose', 'nuclear',
+                 'ubiquitin', 'melanoma', 'autophagy', 'apoptosis', 'replication', 'damaged DNA binding',
+                 'nucleosome', 'histone', 'regulatory'}
+
+    negatives = {'RNA splicing', 'RNA processing', 'myosin', 'translation', 'ribosomal', 'ribosome',
+                 'cytosol', 'cytosolic', 'keratinization -2'}
+
     if any(word in term for word in positives):
         return 1
     elif any(word in term for word in negatives):
@@ -195,7 +203,7 @@ def scrape_antibodypedia_data(uniprot_id):
         print(f"Error for {uniprot_id}: {error}")
 
     # Load table
-    WebDriverWait(driver, 10).until(
+    WebDriverWait(driver, 20).until(
         EC.presence_of_element_located((By.ID, "search_results_table"))
     )
 
@@ -233,7 +241,7 @@ def track_references_antipodypedia(antibody_id):
     driver.get(url)
     
     # Load table
-    WebDriverWait(driver, 10).until(
+    WebDriverWait(driver, 20).until(
         EC.presence_of_element_located((By.ID, "content"))
     )
 
@@ -279,7 +287,7 @@ def compute_score(row):
     # present at 3 timepoints, mock is one of them (fix uv score)
     # any term present gets increase score if found in abstract
 
-    score = row['Total Article Count (normalized)']*-0.5 + row['Term Article Count (normalized)'] + row['Ref-ed Antibodies via Antibodypedia (normalized)']*0.5 + row['\'String\' Interactions (normalized)'] + row['GO Score (normalized)'] + row['UV Score (normalized)']*2
+    score = row['Total Article Count (normalized)']*-1 + row['Term Article Count (normalized)'] + row['Ref-ed Antibodies via Antibodypedia (normalized)'] + row['\'String\' Interactions (normalized)']*1.5 + row['GO Score (normalized)'] + row['UV Score (normalized)']*2
     return score
 
 #----------------- Main -----------------#
@@ -293,7 +301,6 @@ def main(input_csv, output_csv):
 
     # Track start time
     start_time = time.time()
-    print('Starting protein selection query at', start_time)
 
     # Read input CSV
     uniprots = []
@@ -305,7 +312,7 @@ def main(input_csv, output_csv):
         for row in reader:
             uniprots.append(row[0])
             symbols.append(row[2])
-            uvs.append(row[10])
+            uvs.append(row[10]) 
     print('Read input CSV proteins')
 
     # Sorted list of proteins and their associated article counts
@@ -338,21 +345,26 @@ def main(input_csv, output_csv):
         df_all[col] =pd.to_numeric(df_all[col])
         df_all[f'{col} (normalized)'] = df_all[col]/df_all[col].std()
 
-    # Compute weighted score for protein selection and save results to CSV
+    # Compute weighted score for protein selection
     df_all['Overall Score'] = df_all.apply(lambda x: compute_score(x), axis=1)
+    print('Computed scores')
     cols = ['Uniprot', 'Protein Symbol','Antibodypedia Link', 'Ref-ed Antibodies via Antibodypedia',
             'Total Article Count', 'Term Article Count', '\'String\' Interactions', 'GO Score', 
             'UV Score','Overall Score', 'GO Terms']
     df_all = df_all[cols]
+
+    # Sort by overall score and save to CSV
+    df_all.sort_values(by=['Overall Score'], ascending=False, inplace=True)
     df_all.to_csv(final_output_csv)
 
     # Track end time
     endtime = time.time()
-    print('Time taken:', endtime - start_time)
+    total_time = endtime - start_time
+    print(f'Time taken: {total_time:.2f} seconds')
     print('Protein selection data saved to', final_output_csv)
 
-# Main: Adjust input and output CSV file names accordingly
+# Main: Adjust input and output CSV file names accordingly on command line
 if __name__ == "__main__":
-    input_csv = "proteins_with_uv.csv"
-    final_output_csv = "combined-scores-final.csv"
+    input_csv = sys.argv[1]
+    final_output_csv = sys.argv[2]
     main(input_csv, final_output_csv)
