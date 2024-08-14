@@ -15,6 +15,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.options import Options
+from selenium.common.exceptions import TimeoutException
 import time
 from Bio import Entrez
 import sys
@@ -116,7 +117,6 @@ def query_string(strings):
         if len(l) >= 2:
             str_dict[l[0]] += 1
             str_dict[l[1]] += 1
-            print(l[0], l[1])
 
     print('Queried protein interactions')
     return str_dict
@@ -195,11 +195,13 @@ def scrape_antibodypedia_data(uniprot_id):
     options.add_argument("--headless")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--dns-prefetch-disable")
     driver = webdriver.Chrome(options=options)
     url = f'https://www.antibodypedia.com/explore/uniprot%3A{uniprot_id}'
     try:
         driver.get(url)
     except Exception as error:
+        driver.navigate().refresh()
         print(f"Error for {uniprot_id}: {error}")
 
     # Load table
@@ -219,7 +221,6 @@ def scrape_antibodypedia_data(uniprot_id):
         antibodies_link = 'None'
 
     driver.quit()
-    print('Queried for protein:', uniprot_id)
     return (antibodies_link, antibody_id)
 
 def track_references_antipodypedia(antibody_id):
@@ -236,6 +237,7 @@ def track_references_antipodypedia(antibody_id):
     options.add_argument("--headless")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--dns-prefetch-disable")
     driver = webdriver.Chrome(options=options)
     url = f'https://www.antibodypedia.com/gene/{antibody_id}?reference%5B%5D=yes'
     driver.get(url)
