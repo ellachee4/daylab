@@ -22,7 +22,7 @@ Entrez.email = 'salpukas.a@northeastern.edu'
 # ----------------- Article Count ----------------- #
 
 
-def get_article_count(protein_name, do_all):
+def get_article_count(protein_name, article_terms, do_all):
     """
     Query PubMed for the number of articles associated with a
     given protein using both MeSH terms and text words.
@@ -35,7 +35,8 @@ def get_article_count(protein_name, do_all):
     if do_all:
         term = f'{protein_name}[MeSH Terms] OR {protein_name}[tw]'
     else:
-        term = f'{protein_name}[MeSH Terms] OR {protein_name}[tw] AND (UV[Title/Abstract] OR Ultraviolet radiation[Title/Abstract] OR G4[Title/Abstract] OR quadruplex[Title/Abstract] OR dna repair[Title/Abstract] OR melanoma[Title/Abstract])'
+        joined = ' OR '.join([t + '[Title/Abstract]' for t in article_terms])
+        term = f'{protein_name}[MeSH Terms] OR {protein_name}[tw] AND ({joined})'
 
     handle = Entrez.esearch(db='pubmed', term=term)
     record = Entrez.read(handle)
@@ -43,7 +44,7 @@ def get_article_count(protein_name, do_all):
     return int(record['Count'])
 
 
-def query_pubmed(proteins):
+def query_pubmed(proteins, terms):
     """
     Query PubMed for a list of proteins and return a sorted list of proteins
     and the number of associated articles.
@@ -51,9 +52,9 @@ def query_pubmed(proteins):
     protein_all_article_counts = []
     protein_specific_article_counts = []
     for protein in proteins:
-        all_count = get_article_count(protein, True)
+        all_count = get_article_count(protein, terms, True)
         protein_all_article_counts.append(all_count)
-        specific_count = get_article_count(protein, False)
+        specific_count = get_article_count(protein, terms, False)
         protein_specific_article_counts.append(specific_count)
         length = len(protein_all_article_counts)
         if length % 100 == 0:
@@ -123,7 +124,7 @@ def query_string(strings):
 # ----------------- GO Terms ----------------- #
 
 
-def query_ebi(uniprots):
+def query_ebi(uniprots, positives, negatives):
     """Query GO terms for a list of proteins and return a list of GO scores and terms."""
 
     scores = []
@@ -147,7 +148,7 @@ def query_ebi(uniprots):
                 gos.append((x['id'], x.get('properties', {}).get('term', 'N/A')))
             elif x['type'] == 'Antibodypedia':
                 antibodypedia_id = x['id']
-        score = sum(map(go_score, gos))
+        score = sum(go_score(go, positives, negatives) for go in gos)
         scores.append(score)
         terms.append([go[1] for go in gos])
         antibody_ids.append(antibodypedia_id)
@@ -214,7 +215,7 @@ def query_antibodypedia(symbols, antibody_ids):
 # ----------------- GO Score ----------------- #
 
 
-def go_score(go):
+def go_score(go, positives, negatives):
     """
     Calculate GO score, based on importance of GO term
     (extra weights for damage response, DNA binding, DNA repair, less for general repair).
@@ -222,15 +223,6 @@ def go_score(go):
 
     # Define positive and negative terms
     term = go[1]
-    positives = {'damage response', 'DNA binding', 'DNA-binding', 'DNA repair',
-                 'nucleotide-excision repair', 'transcription', 'repair', 'DNA helicase', 'helicase',
-                 'chromatin binding', 'G4', 'quadruplex', 'guanine', 'gtpase', 'transcription initiation',
-                 'transcription termination', 'transcription activator', 'poly-ADP-D-ribose', 'nuclear',
-                 'ubiquitin', 'melanoma', 'autophagy', 'apoptosis', 'replication', 'damaged DNA binding',
-                 'nucleosome', 'histone', 'regulatory'}
-
-    negatives = {'RNA splicing', 'RNA processing', 'myosin', 'translation', 'ribosomal', 'ribosome',
-                 'cytosol', 'cytosolic', 'keratinization -2'}
 
     # Return scores
     if any(word in term for word in positives):
@@ -275,6 +267,41 @@ def compute_score(row, cols, weights):
 
 # ----------------- Main ----------------- #
 
+def get_go_terms():
+    """
+    Retrieve positively and negatively weighted GO keywords from user
+    """
+    positives = input('Enter positively weighted GO keywords (comma-separated): ')
+    positives = [word.strip() for word in positives.split(',')]
+    negatives = input('Enter negatively weighted GO keywords (comma-separated): ')
+    negatives = [word.strip() for word in negatives.split(',')]
+    return positives, negatives
+
+
+def get_terms_and_weights(uv):
+    """
+    Retrieve relevant article search terms and score weights from user
+    """
+    terms = input('Enter relevant terms for article search (comma-separated): ')
+    terms = [word.strip() for word in terms.split(',')]
+
+    default_weights = input('Use default weights? (Yes/No): ')
+    weights = [1, -1, 1, 1.5, 1]
+    question = """
+    Enter weights for antibody availability, total article count, 
+    relevant term article count, protein-protein interactions, 
+    """
+    if uv:
+        weights.append(2)
+        question += 'GO term score, and UV score (comma-separated): '
+    else:
+        question += 'and GO term score (comma-separated)'
+
+    if default_weights != 'Yes':
+        weights = input(question)
+        weights = [float(w.strip()) for w in weights.split(',')]
+    return terms, weights
+
 
 def run_protfiler(args):
     """
@@ -283,6 +310,8 @@ def run_protfiler(args):
     query Antibodypedia.com for referenced antibodies, find associated
     GO terms and compute a selection score, save results to CSV file.
     """
+    positive_gos, negative_gos = get_go_terms()
+    article_terms, score_weights = get_terms_and_weights(args.uv)
 
     # Track start time
     start_time = time.time()
@@ -309,12 +338,12 @@ def run_protfiler(args):
     print('Read input CSV proteins')
 
     # Sorted list of proteins and their associated article counts
-    total_article_counts, term_article_counts = query_pubmed(symbols)
+    total_article_counts, term_article_counts = query_pubmed(symbols, article_terms)
     mapping = uniprot_to_string(uniprots)
     print('String IDs not found:', [u for u in uniprots if u not in mapping.keys()])
     strings = [mapping[uni] if uni in mapping.keys() else '' for uni in uniprots]
     interactions = query_string(strings)
-    go_scores, go_terms, antibodypedia_ids = query_ebi(uniprots)
+    go_scores, go_terms, antibodypedia_ids = query_ebi(uniprots, positive_gos, negative_gos)
     links, num_referenced = query_antibodypedia(symbols, antibodypedia_ids)
 
     # Initialize data dictionary
@@ -334,19 +363,20 @@ def run_protfiler(args):
     df_all = pd.DataFrame(data_dict)
     score_cols = ['Ref-ed Antibodies via Antibodypedia', 'Total Article Count', 'Term Article Count',
                   '\'String\' Interactions', 'GO Score']
-    score_weights = [1, -1, 1, 1.5, 1]
 
     # In case of UV timepoints
     if args.uv:
         df_all['UV_treatment'] = uvs
         df_all['UV Score'] = df_all['UV_treatment'].apply(lambda x: uv_score(x))
         score_cols.append('UV Score')
-        score_weights.append(2)
 
     # Normalize columns for scoring
     for col in score_cols:
         df_all[col] = pd.to_numeric(df_all[col])
-        df_all[f'{col} (normalized)'] = df_all[col]/df_all[col].std()
+        if df_all[col].nunique() == 1:
+            df_all[f'{col} (normalized)'] = df_all[col]
+        else:
+            df_all[f'{col} (normalized)'] = df_all[col]/df_all[col].std()
 
     # Compute weighted score for protein selection
     df_all['Overall Score'] = df_all.apply(lambda x: compute_score(x, score_cols, score_weights), axis=1)
